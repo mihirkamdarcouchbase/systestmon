@@ -14,57 +14,62 @@ import requests
 
 
 class SysTestMon():
-    # Frequency of scanning the logs in seconds
+    # Input map of keywords to be mined for in the logs
     configuration = [
-         {
-             "component": "analytics",
-             "logfiles": "analytics*",
-             "services": "cbas",
-             "keywords": ["fata","Analytics Service is temporarily unavailable"]
-         },
-         {
-             "component": "eventing",
-             "logfiles": "eventing.log*",
-             "services": "eventing",
-             "keywords": ["panic", "fatal"]
-         },
-         {
-             "component": "index",
-             "logfiles": "indexer.log*",
-             "services": "index",
-             "keywords": ["panic", "fatal"]
-         },
-
-         {
-             "component": "fts",
-             "logfiles": "fts.log*",
-             "services": "fts",
-             "keywords": ["panic", "fatal"]
-         },
-         {
-             "component": "xdcr",
-             "logfiles": "*xdcr*.log*",
-             "services": "kv",
-             "keywords": ["panic", "fatal"]
-         },
-         {
-             "component": "projector",
-             "logfiles": "projector.log*",
-             "services": "kv",
-             "keywords": ["panic"]
-         },
-         {
-             "component": "rebalance",
-             "logfiles": "error.log*",
-             "services": "kv",
-             "keywords": ["rebalance exited"]
-         },
-         {
-             "component": "crash",
-             "logfiles": "error.log*",
-             "services": "kv",
-             "keywords": ["service exited"]
-         },
+        {
+            "component": "memcached",
+            "logfiles": "babysitter.log*",
+            "services": "all",
+            "keywords": ["failed to open database file for vBucket"]
+        },
+        {
+            "component": "index",
+            "logfiles": "indexer.log*",
+            "services": "index",
+            "keywords": ["panic", "fatal", "Error parsing XATTR"]
+        },
+        {
+            "component": "analytics",
+            "logfiles": "analytics_error*",
+            "services": "cbas",
+            "keywords": ["fata", "Analytics Service is temporarily unavailable", "Failed during startup task"]
+        },
+        {
+            "component": "eventing",
+            "logfiles": "eventing.log*",
+            "services": "eventing",
+            "keywords": ["panic", "fatal"]
+        },
+        {
+            "component": "fts",
+            "logfiles": "fts.log*",
+            "services": "fts",
+            "keywords": ["panic", "fatal"]
+        },
+        {
+            "component": "xdcr",
+            "logfiles": "*xdcr*.log*",
+            "services": "kv",
+            "keywords": ["panic", "fatal"]
+        },
+        {
+            "component": "projector",
+            "logfiles": "projector.log*",
+            "services": "kv",
+            "keywords": ["panic", "Error parsing XATTR", "fata"]
+        },
+        {
+            "component": "rebalance",
+            "logfiles": "error.log*",
+            "services": "all",
+            "keywords": ["rebalance exited"]
+        },
+        {
+            "component": "crash",
+            "logfiles": "error.log*",
+            "services": "all",
+            "keywords": ["exited with status"]
+        },
         {
             "component": "query",
             "logfiles": "query.log*",
@@ -72,6 +77,7 @@ class SysTestMon():
             "keywords": ["panic", "fatal"]
         }
     ]
+    # Frequency of scanning the logs in seconds
     scan_interval = 120
     # Level of memory usage after which alert should be raised
     mem_threshold = 90
@@ -93,6 +99,10 @@ class SysTestMon():
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         ch.setFormatter(formatter)
         self.logger.addHandler(ch)
+        timestamp = str(datetime.now().strftime('%Y%m%dT_%H%M%S'))
+        fh = logging.FileHandler("./systestmon-{0}.log".format(timestamp))
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
 
         master_node = sys.argv[1]
         rest_username = sys.argv[2]
@@ -108,9 +118,10 @@ class SysTestMon():
         prev_keyword_counts = None
         keyword_counts = {}
         keyword_counts["timestamp"] = timestamp
-        should_cbcollect = False
 
         while True:
+            should_cbcollect = False
+
             for component in self.configuration:
                 nodes = self.find_nodes_with_service(node_map,
                                                      component["services"])
@@ -121,7 +132,7 @@ class SysTestMon():
                 for keyword in component["keywords"]:
                     key = component["component"] + "_" + keyword
                     self.logger.info(
-                        "Parsing logs for {0} component looking for {1}".format(
+                        "--+--+--+--+-- Parsing logs for {0} component looking for {1} --+--+--+--+--".format(
                             component["component"], keyword))
                     total_occurences = 0
 
@@ -136,8 +147,9 @@ class SysTestMon():
                                     occurences,
                                     keyword,
                                     node))
-                            for i in range(len(output)):
-                                print output[i]
+                            self.logger.info('\n'.join(output))
+                            # for i in range(len(output)):
+                            #    self.logger.info(output[i])
                         else:
                             self.logger.info(
                                 "No occurences of {0} keyword found on {1}".format(
@@ -146,11 +158,11 @@ class SysTestMon():
                         total_occurences += occurences
 
                     keyword_counts[key] = total_occurences
-                    if prev_keyword_counts is not None:
+                    if prev_keyword_counts is not None and key in prev_keyword_counts.keys():
                         if total_occurences > int(prev_keyword_counts[key]):
                             self.logger.warn(
-                                "There have been more occurences of keyword {0} in the logs for {1} since the last iteration. Hence performing a cbcollect.".format(
-                                    keyword, node))
+                                "There have been more occurences of keyword {0} in the logs since the last iteration. Hence performing a cbcollect.".format(
+                                    keyword))
                             should_cbcollect = True
                     else:
                         if total_occurences > 0:
@@ -206,19 +218,20 @@ class SysTestMon():
                             "Error seen while running cbcollect_info ")
                         self.logger.info(std_err)
                     else:
-                        #for i in range(len(cbcollect_output)):
+                        # for i in range(len(cbcollect_output)):
                         #    print cbcollect_output[i]
                         if cbcollect_output[0] == "Status: completed":
                             cbcollect_upload_paths = []
                             num_nodes = (len(cbcollect_output) - 2) / 4
                             j = 0
-                            for i in range(1, num_nodes+1):
+                            for i in range(1, num_nodes + 1):
                                 j = 1 + (i * 4)
                                 cbcollect_upload_paths.append(
                                     cbcollect_output[j].replace("\turl : ", ""))
                             self.logger.info("cbcollect upload paths : \n")
-                            for i in range(len(cbcollect_upload_paths)):
-                                print cbcollect_upload_paths[i]
+                            self.logger.info('\n'.join(cbcollect_upload_paths))
+                            # for i in range(len(cbcollect_upload_paths)):
+                            #    print cbcollect_upload_paths[i]
 
                             break
                         elif cbcollect_output[0] == "Status: running":
@@ -226,9 +239,8 @@ class SysTestMon():
                         else:
                             self.logger.error("Issue with cbcollect")
 
-
             prev_keyword_counts = copy.deepcopy(keyword_counts)
-            #self.logger.info(prev_keyword_counts)
+            # self.logger.info(prev_keyword_counts)
 
             self.logger.info(
                 "====== Log scan complete. Sleeping for {0} seconds ======".format(
@@ -265,9 +277,11 @@ class SysTestMon():
     def find_nodes_with_service(self, node_map, service):
         nodelist = []
         for node in node_map:
-            if service in node["services"]:
+            if service == "all":
                 nodelist.append(node["hostname"])
-
+            else:
+                if service in node["services"]:
+                    nodelist.append(node["hostname"])
         return nodelist
 
     def execute_command(self, command, hostname, ssh_username, ssh_password):
@@ -321,7 +335,7 @@ class SysTestMon():
         ssh.close()
 
         # return len(output) - 1, output, ssh_stderr
-        return len(output) - 1, output, error
+        return len(output), output, error
 
 
 if __name__ == '__main__':
