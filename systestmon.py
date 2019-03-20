@@ -20,7 +20,13 @@ class SysTestMon():
             "component": "memcached",
             "logfiles": "babysitter.log*",
             "services": "all",
-            "keywords": ["failed to open database file for vBucket"]
+            "keywords": ["exception occurred in runloop"]
+        },
+        {
+            "component": "memcached",
+            "logfiles": "memcached.log.*",
+            "services": "all",
+            "keywords": ["CRITICAL"]
         },
         {
             "component": "index",
@@ -32,7 +38,7 @@ class SysTestMon():
             "component": "analytics",
             "logfiles": "analytics_error*",
             "services": "cbas",
-            "keywords": ["fata", "Analytics Service is temporarily unavailable", "Failed during startup task"]
+            "keywords": ["fata", "Analytics Service is temporarily unavailable", "Failed during startup task","HYR0", "ASX"]
         },
         {
             "component": "eventing",
@@ -66,7 +72,7 @@ class SysTestMon():
         },
         {
             "component": "crash",
-            "logfiles": "error.log*",
+            "logfiles": "info.log*",
             "services": "all",
             "keywords": ["exited with status"]
         },
