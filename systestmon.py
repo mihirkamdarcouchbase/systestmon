@@ -38,7 +38,7 @@ class SysTestMon():
             "component": "analytics",
             "logfiles": "analytics_error*",
             "services": "cbas",
-            "keywords": ["fata", "Analytics Service is temporarily unavailable", "Failed during startup task","HYR0", "ASX"]
+            "keywords": ["fata", "Analytics Service is temporarily unavailable", "Failed during startup task","HYR0", "ASX", "IllegalStateException"]
         },
         {
             "component": "eventing",
