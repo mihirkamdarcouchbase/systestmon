@@ -84,7 +84,7 @@ class SysTestMon():
         }
     ]
     # Frequency of scanning the logs in seconds
-    scan_interval = 120
+    scan_interval = 3600
     # Level of memory usage after which alert should be raised
     mem_threshold = 90
     # Level of CPU usage after which alert should be raised
